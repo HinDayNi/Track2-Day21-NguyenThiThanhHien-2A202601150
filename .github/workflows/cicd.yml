@@ -157,13 +157,13 @@ jobs:
     steps:
       - name: Verify SSH key
         shell: bash
+        env:
+          DEPLOY_KEY: ${{ secrets.SERVER_SSH_KEY }}
         run: |
-          printf '%s\n' '${{ secrets.SERVER_SSH_KEY }}' > /tmp/deploy_key
+          printf '%s\n' "$DEPLOY_KEY" > /tmp/deploy_key
           chmod 600 /tmp/deploy_key
 
-          ssh-keygen -y \
-            -f /tmp/deploy_key \
-            > /tmp/deploy_key.pub
+          ssh-keygen -y -f /tmp/deploy_key > /tmp/deploy_key.pub
 
           echo "GitHub secret key fingerprint:"
           ssh-keygen -lf /tmp/deploy_key.pub
