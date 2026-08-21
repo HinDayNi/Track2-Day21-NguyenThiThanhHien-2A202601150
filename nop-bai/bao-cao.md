@@ -93,12 +93,10 @@ thêm thông tin mới" được đánh giá cao hơn kết luận sai rằng th
 
 ---
 
-## 5. Phần Bonus Đã Thực Hiện (nếu có)
+## 5. Phần Bonus Đã Thực Hiện
 
-<!-- Xóa cả mục 5 nếu không làm bonus. Mỗi bonus tối đa 1 dòng. -->
-
-- [ ] Bonus 1 - Tracking MLflow từ xa với DagsHub: ___
-- [ ] Bonus 2 - Điều chỉnh ngưỡng quyết định: ___
-- [ ] Bonus 3 - Báo cáo precision / recall tự động: ___
-- [ ] Bonus 4 - Hoàn trả về phiên bản trước: ___
-- [ ] Bonus 5 - Cảnh báo lệch lạc dữ liệu: ___
+- [ ] Bonus 1 - Tracking MLflow từ xa với DagsHub: Chưa thực hiện.
+- [x] Bonus 2 - Điều chỉnh ngưỡng quyết định: Quét threshold từ 0.10 đến 0.90; threshold tốt nhất là 0.45, F1 tăng từ 0.7014 lên 0.7345.
+- [x] Bonus 3 - Báo cáo precision / recall tự động: Precision=0.8506, Recall=0.5968, confusion matrix TN=363, FP=13, FN=50, TP=74; kết quả được lưu trong artifact của GitHub Actions.
+- [x] Bonus 4 - Hoàn trả về phiên bản trước: Pipeline có Regression Gate so sánh F1 của candidate với model hiện tại; nếu F1 giảm thì chặn deploy, nếu đạt thì lưu bản hiện tại vào `previous` và promote candidate thành `current`.
+- [x] Bonus 5 - Cảnh báo lệch lạc dữ liệu: Tỷ lệ lớp dương 24.78% so với mốc 24.80%, không vượt ngưỡng lệch ±5% nên không phát cảnh báo.
