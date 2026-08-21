@@ -1,134 +1,28 @@
-name: Income Model CI/CD
+release:
+  name: Release
+  needs: quality-gate
+  runs-on: ubuntu-latest
 
-on:
-  push:
-    branches: [main]
-    paths:
-      - 'data/**.dvc'
-      - 'src/**.py'
-      - 'params.yaml'
-  workflow_dispatch:
+  steps:
+    - name: Verify SSH key
+      shell: bash
+      run: |
+        printf '%s\n' '${{ secrets.SERVER_SSH_KEY }}' > /tmp/deploy_key
+        chmod 600 /tmp/deploy_key
 
-jobs:
+        ssh-keygen -y -f /tmp/deploy_key > /tmp/deploy_key.pub
 
-  # ---------------------------------------------------------------------------
-  # JOB 1 - UNIT TEST
-  # ---------------------------------------------------------------------------
-  unit-test:
-    name: Unit Test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+        echo "GitHub secret key fingerprint:"
+        ssh-keygen -lf /tmp/deploy_key.pub
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Run unit tests
-        # TODO 1
-        run: pytest tests/ -v
-
-
-  # ---------------------------------------------------------------------------
-  # JOB 2 - TRAIN
-  # ---------------------------------------------------------------------------
-  train:
-    name: Train
-    needs: unit-test
-    runs-on: ubuntu-latest
-    outputs:
-      f1: ${{ steps.read_report.outputs.f1 }}
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Authenticate to Cloud Storage (AWS)
-        # TODO 2
-        run: |
-          echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> $GITHUB_ENV
-          echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> $GITHUB_ENV
-
-      - name: Pull data with DVC
-        # TODO 3
-        run: dvc pull data/train_batch1.csv.dvc data/holdout.csv.dvc
-
-      - name: Train model
-        run: python src/train.py
-
-      - name: Read report
-        id: read_report
-        # TODO 4
-        run: |
-          F1=$(python -c "import json; d=json.load(open('outputs/report.json')); print(d['f1_score'])")
-          echo "f1=$F1" >> $GITHUB_OUTPUT
-
-      - name: Upload model to Cloud Storage (AWS S3)
-        # TODO 5
-        run: |
-          python - <<'PYEOF'
-          import boto3
-          import os
-          bucket = "${{ secrets.ARTIFACT_BUCKET }}"
-          s3 = boto3.client("s3", region_name="us-east-1")
-          s3.upload_file("models/model.joblib", bucket, "artifacts/current/model.joblib")
-          print("Upload model thanh cong len S3.")
-          PYEOF
-
-      - name: Save report as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: report
-          path: outputs/report.json
-
-
-  # ---------------------------------------------------------------------------
-  # JOB 3 - QUALITY GATE
-  # ---------------------------------------------------------------------------
-  quality-gate:
-    name: Quality Gate
-    needs: train
-    runs-on: ubuntu-latest
-    steps:
-
-      - name: Check quality gate
-        # TODO 6
-        run: |
-          python - <<'PYEOF'
-          f1 = float("${{ needs.train.outputs.f1 }}")
-          print(f"Checking F1 score: {f1} against threshold 0.65")
-          if f1 < 0.65:
-              raise SystemExit(f"FAILED: f1_score {f1:.4f} < 0.65. Huy trien khai.")
-          print("PASSED: dang trien khai model.")
-          PYEOF
-
-
-  # ---------------------------------------------------------------------------
-  # JOB 4 - RELEASE
-  # ---------------------------------------------------------------------------
-  release:
-    name: Release
-    needs: quality-gate
-    runs-on: ubuntu-latest
-    steps:
-
-      - name: SSH deploy to VM
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          script: |
-            sudo systemctl restart income-api
-            sleep 5
-            curl --fail http://127.0.0.1:8080/healthz
-            echo "Health check passed."
+    - name: SSH deploy to VM
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SERVER_SSH_KEY }}
+        script: |
+          sudo systemctl restart income-api
+          sleep 5
+          curl --fail http://127.0.0.1:8080/healthz
+          echo "Health check passed."
