@@ -146,110 +146,110 @@ jobs:
           )
           PYEOF
 
-    regression-gate:
-    name: Regression Gate
-    needs: [train, quality-gate]
-    runs-on: ubuntu-latest
+  regression-gate:
+  name: Regression Gate
+  needs: [train, quality-gate]
+  runs-on: ubuntu-latest
 
-    steps:
-      - name: Authenticate AWS
-        run: |
-          echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> "$GITHUB_ENV"
-          echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> "$GITHUB_ENV"
-          echo "AWS_DEFAULT_REGION=us-east-1" >> "$GITHUB_ENV"
+  steps:
+    - name: Authenticate AWS
+      run: |
+        echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> "$GITHUB_ENV"
+        echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> "$GITHUB_ENV"
+        echo "AWS_DEFAULT_REGION=us-east-1" >> "$GITHUB_ENV"
 
-      - name: Compare and promote model
-        env:
-          NEW_F1: ${{ needs.train.outputs.f1 }}
-        run: |
-          python - <<'PYEOF'
-          import boto3
-          import json
-          import os
-          from botocore.exceptions import ClientError
+    - name: Compare and promote model
+      env:
+        NEW_F1: ${{ needs.train.outputs.f1 }}
+      run: |
+        python - <<'PYEOF'
+        import boto3
+        import json
+        import os
+        from botocore.exceptions import ClientError
 
-          bucket = "${{ secrets.ARTIFACT_BUCKET }}"
-          new_f1 = float(os.environ["NEW_F1"])
+        bucket = "${{ secrets.ARTIFACT_BUCKET }}"
+        new_f1 = float(os.environ["NEW_F1"])
 
-          s3 = boto3.client("s3", region_name="us-east-1")
+        s3 = boto3.client("s3", region_name="us-east-1")
 
-          current_f1 = None
+        current_f1 = None
 
-          try:
-              obj = s3.get_object(
-                  Bucket=bucket,
-                  Key="artifacts/current/report.json"
-              )
-              current_report = json.loads(
-                  obj["Body"].read().decode("utf-8")
-              )
-              current_f1 = float(
-                  current_report["f1_score"]
-              )
-          except ClientError as e:
-              if e.response["Error"]["Code"] not in (
-                  "NoSuchKey",
-                  "404",
-              ):
-                  raise
+        try:
+            obj = s3.get_object(
+                Bucket=bucket,
+                Key="artifacts/current/report.json"
+            )
+            current_report = json.loads(
+                obj["Body"].read().decode("utf-8")
+            )
+            current_f1 = float(
+                current_report["f1_score"]
+            )
+        except ClientError as e:
+            if e.response["Error"]["Code"] not in (
+                "NoSuchKey",
+                "404",
+            ):
+                raise
 
-          print(f"Candidate F1: {new_f1:.4f}")
+        print(f"Candidate F1: {new_f1:.4f}")
 
-          if current_f1 is not None:
-              print(f"Current F1: {current_f1:.4f}")
+        if current_f1 is not None:
+            print(f"Current F1: {current_f1:.4f}")
 
-              if new_f1 < current_f1:
-                  raise SystemExit(
-                      f"Regression detected: "
-                      f"{new_f1:.4f} < {current_f1:.4f}. "
-                      f"Deployment blocked."
-                  )
+            if new_f1 < current_f1:
+                raise SystemExit(
+                    f"Regression detected: "
+                    f"{new_f1:.4f} < {current_f1:.4f}. "
+                    f"Deployment blocked."
+                )
 
-              # backup model hien tai
-              s3.copy_object(
-                  Bucket=bucket,
-                  CopySource={
-                      "Bucket": bucket,
-                      "Key": "artifacts/current/model.joblib",
-                  },
-                  Key="artifacts/previous/model.joblib",
-              )
+            # backup model hien tai
+            s3.copy_object(
+                Bucket=bucket,
+                CopySource={
+                    "Bucket": bucket,
+                    "Key": "artifacts/current/model.joblib",
+                },
+                Key="artifacts/previous/model.joblib",
+            )
 
-              s3.copy_object(
-                  Bucket=bucket,
-                  CopySource={
-                      "Bucket": bucket,
-                      "Key": "artifacts/current/report.json",
-                  },
-                  Key="artifacts/previous/report.json",
-              )
-          else:
-              print(
-                  "No current report found; "
-                  "bootstrapping current model."
-              )
+            s3.copy_object(
+                Bucket=bucket,
+                CopySource={
+                    "Bucket": bucket,
+                    "Key": "artifacts/current/report.json",
+                },
+                Key="artifacts/previous/report.json",
+            )
+        else:
+            print(
+                "No current report found; "
+                "bootstrapping current model."
+            )
 
-          # promote candidate
-          s3.copy_object(
-              Bucket=bucket,
-              CopySource={
-                  "Bucket": bucket,
-                  "Key": "artifacts/candidate/model.joblib",
-              },
-              Key="artifacts/current/model.joblib",
-          )
+        # promote candidate
+        s3.copy_object(
+            Bucket=bucket,
+            CopySource={
+                "Bucket": bucket,
+                "Key": "artifacts/candidate/model.joblib",
+            },
+            Key="artifacts/current/model.joblib",
+        )
 
-          s3.copy_object(
-              Bucket=bucket,
-              CopySource={
-                  "Bucket": bucket,
-                  "Key": "artifacts/candidate/report.json",
-              },
-              Key="artifacts/current/report.json",
-          )
+        s3.copy_object(
+            Bucket=bucket,
+            CopySource={
+                "Bucket": bucket,
+                "Key": "artifacts/candidate/report.json",
+            },
+            Key="artifacts/current/report.json",
+        )
 
-          print("Candidate promoted to current.")
-          PYEOF
+        print("Candidate promoted to current.")
+        PYEOF
   # ============================================================
   # JOB 4 - RELEASE
   # ============================================================
